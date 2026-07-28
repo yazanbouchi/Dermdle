@@ -1,0 +1,845 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Derm Wordle</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<script>
+  (function(){
+    try{
+      var saved = localStorage.getItem("dw_theme");
+      var theme = saved || "light";
+      document.documentElement.setAttribute("data-theme", theme);
+    }catch(e){
+      document.documentElement.setAttribute("data-theme", "light");
+    }
+  })();
+</script>
+<style>
+  :root{
+    --ink:#16262B;
+    --ink-2:#1F3339;
+    --paper:#EFEADD;
+    --paper-rgb:239,234,221;
+    --confirmed:#4B6E5D;
+    --differential:#C68A3D;
+    --ruled-out:#5C6660;
+    --stamp:#8B3A3A;
+    --line: rgba(var(--paper-rgb),0.18);
+    --key-hover:#28454C;
+    --note-bg:#EFEADD;
+    --note-fg:#16262B;
+    --note-fg-dim:#33403C;
+  }
+  :root[data-theme="light"]{
+    --ink:#F6F1E2;
+    --ink-2:#EAE0C4;
+    --paper:#241D14;
+    --paper-rgb:36,29,20;
+    --key-hover:#DED2AE;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    min-height:100vh;
+    background:
+      radial-gradient(circle at 20% -10%, rgba(75,110,93,0.15), transparent 45%),
+      radial-gradient(circle at 100% 10%, rgba(198,138,61,0.10), transparent 40%),
+      var(--ink);
+    color:var(--paper);
+    font-family:'IBM Plex Sans', sans-serif;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    padding:28px 16px 60px;
+    transition:background-color 0.25s ease, color 0.25s ease;
+  }
+  #theme-toggle{
+    position:fixed;
+    top:16px;
+    right:16px;
+    width:34px;
+    height:34px;
+    border-radius:50%;
+    border:1px solid var(--line);
+    background:var(--ink-2);
+    color:var(--paper);
+    font-size:15px;
+    cursor:pointer;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    z-index:10;
+  }
+  #theme-toggle:hover{ background:var(--key-hover); }
+  header{
+    width:100%;
+    max-width:420px;
+    text-align:center;
+    margin-bottom:18px;
+    border-bottom:1px solid var(--line);
+    padding-bottom:14px;
+  }
+  .eyebrow{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:11px;
+    letter-spacing:0.18em;
+    text-transform:uppercase;
+    color:var(--differential);
+    margin-bottom:6px;
+  }
+  h1{
+    font-family:'Fraunces', serif;
+    font-weight:700;
+    font-size:32px;
+    margin:0 0 4px;
+    letter-spacing:-0.01em;
+  }
+  .byline{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:10.5px;
+    letter-spacing:0.1em;
+    text-transform:uppercase;
+    color:rgba(198,138,61,0.85);
+    margin-bottom:8px;
+  }
+  .subtitle{
+    font-size:13px;
+    color:rgba(var(--paper-rgb),0.6);
+    font-style:italic;
+    font-family:'Fraunces', serif;
+  }
+  .case-row{
+    display:flex;
+    justify-content:space-between;
+    margin-top:10px;
+    font-family:'IBM Plex Mono', monospace;
+    font-size:11px;
+    color:rgba(var(--paper-rgb),0.5);
+  }
+
+  #hint-row{
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap:8px;
+    margin-bottom:16px;
+    max-width:340px;
+  }
+  #hint-btn{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:11px;
+    letter-spacing:0.1em;
+    text-transform:uppercase;
+    background:transparent;
+    border:1px solid rgba(198,138,61,0.6);
+    color:var(--differential);
+    padding:7px 14px;
+    border-radius:3px;
+    cursor:pointer;
+  }
+  #hint-btn:hover:not(:disabled){ background:rgba(198,138,61,0.12); }
+  #hint-btn:disabled{
+    opacity:0.35;
+    cursor:default;
+    border-color:rgba(var(--paper-rgb),0.25);
+    color:rgba(var(--paper-rgb),0.4);
+  }
+  #hint-text{
+    font-family:'Fraunces', serif;
+    font-style:italic;
+    font-size:13px;
+    color:rgba(var(--paper-rgb),0.75);
+    text-align:center;
+    line-height:1.4;
+    min-height:0;
+  }
+
+  #board{
+    display:grid;
+    grid-template-rows:repeat(6, 1fr);
+    gap:7px;
+    margin-bottom:22px;
+  }
+  .row{
+    display:grid;
+  }
+  .tile{
+    border:1.5px solid rgba(var(--paper-rgb),0.25);
+    border-radius:4px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-family:'IBM Plex Mono', monospace;
+    font-weight:600;
+    text-transform:uppercase;
+    color:var(--paper);
+    background:transparent;
+    transition:transform 0.15s ease;
+  }
+  .tile.filled{ border-color:rgba(var(--paper-rgb),0.55); }
+  .tile.flip{ animation:flip 0.5s ease forwards; }
+  @keyframes flip{
+    0%{ transform:rotateX(0deg); }
+    50%{ transform:rotateX(90deg); }
+    51%{ transform:rotateX(90deg); }
+    100%{ transform:rotateX(0deg); }
+  }
+  .tile.correct{ background:var(--confirmed); border-color:var(--confirmed); }
+  .tile.present{ background:var(--differential); border-color:var(--differential); }
+  .tile.absent{ background:var(--ruled-out); border-color:var(--ruled-out); opacity:0.85; }
+  .row.shake{ animation:shake 0.4s ease; }
+  @keyframes shake{
+    10%,90%{ transform:translateX(-2px); }
+    20%,80%{ transform:translateX(4px); }
+    30%,50%,70%{ transform:translateX(-6px); }
+    40%,60%{ transform:translateX(6px); }
+  }
+
+  #keyboard{
+    display:flex;
+    flex-direction:column;
+    gap:7px;
+    width:100%;
+    max-width:420px;
+  }
+  .krow{ display:flex; justify-content:center; gap:5px; }
+  .key{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:12px;
+    font-weight:600;
+    background:var(--ink-2);
+    color:var(--paper);
+    border:1px solid rgba(var(--paper-rgb),0.15);
+    border-radius:4px;
+    padding:12px 8px;
+    min-width:30px;
+    flex:1;
+    max-width:38px;
+    text-align:center;
+    cursor:pointer;
+    text-transform:uppercase;
+    user-select:none;
+    transition:background 0.15s ease;
+  }
+  .key:hover{ background:var(--key-hover); }
+  .key.wide{ flex:1.6; max-width:60px; font-size:10px; }
+  .key.correct{ background:var(--confirmed); }
+  .key.present{ background:var(--differential); }
+  .key.absent{ background:var(--ruled-out); opacity:0.6; }
+
+  #message{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:12px;
+    letter-spacing:0.05em;
+    min-height:18px;
+    margin-bottom:14px;
+    color:var(--differential);
+    text-align:center;
+  }
+
+  #chart-note{
+    display:none;
+    max-width:380px;
+    margin-top:6px;
+    margin-bottom:20px;
+    background:var(--note-bg);
+    color:var(--note-fg);
+    border:1px dashed var(--stamp);
+    border-radius:2px;
+    padding:16px 18px;
+    transform:rotate(-1deg);
+    box-shadow:0 8px 24px rgba(0,0,0,0.35);
+    font-family:'IBM Plex Mono', monospace;
+    animation:pin-in 0.4s ease forwards;
+  }
+  @keyframes pin-in{
+    from{ opacity:0; transform:rotate(-1deg) translateY(10px); }
+    to{ opacity:1; transform:rotate(-1deg) translateY(0); }
+  }
+  #chart-note .stamp{
+    font-size:10px;
+    letter-spacing:0.16em;
+    color:var(--stamp);
+    font-weight:600;
+    margin-bottom:8px;
+  }
+  #chart-note .word{
+    font-family:'Fraunces', serif;
+    font-size:20px;
+    font-weight:700;
+    color:var(--note-fg);
+    margin-bottom:6px;
+    text-transform:capitalize;
+  }
+  #chart-note .def{
+    font-size:12.5px;
+    line-height:1.5;
+    color:var(--note-fg-dim);
+  }
+
+  #newgame{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:11px;
+    letter-spacing:0.1em;
+    text-transform:uppercase;
+    background:transparent;
+    border:1px solid rgba(var(--paper-rgb),0.4);
+    color:var(--paper);
+    padding:9px 16px;
+    border-radius:3px;
+    cursor:pointer;
+    margin-bottom:10px;
+  }
+  #newgame:hover{ background:rgba(var(--paper-rgb),0.08); }
+
+  footer{
+    margin-top:20px;
+    font-size:10px;
+    color:rgba(var(--paper-rgb),0.35);
+    font-family:'IBM Plex Mono', monospace;
+    text-align:center;
+    max-width:340px;
+  }
+
+</style>
+</head>
+<body>
+
+<button id="theme-toggle" aria-label="Toggle light and dark mode">&#9728;</button>
+
+<header>
+  <div class="eyebrow">Case presentation</div>
+  <h1>Derm Wordle</h1>
+  <div class="byline">Shared by Yazan</div>
+  <div class="subtitle" id="subtitle">one diagnosis per day</div>
+  <div class="case-row">
+    <span id="case-number">Case No. 001</span>
+    <span id="attempts-left">6 attempts remaining</span>
+  </div>
+</header>
+
+<div id="message"></div>
+<div id="hint-row">
+  <button id="hint-btn">Hint</button>
+  <div id="hint-text"></div>
+</div>
+<div id="board"></div>
+<div id="chart-note"></div>
+<button id="newgame" style="display:none;">Practice round</button>
+
+<div id="keyboard"></div>
+
+<footer>Guesses are checked against the derm word bank below, not a general dictionary. Type or tap to play.</footer>
+
+<script>
+const WORD_BANK = [
+  {w:"ECZEMA", def:"Chronic inflammatory dermatitis with itching and lichenification."},
+  {w:"DERMIS", def:"The connective tissue layer beneath the epidermis."},
+  {w:"PAPULE", def:"A small, solid raised lesion under 1 cm."},
+  {w:"MACULE", def:"A flat, non-palpable lesion under 1 cm."},
+  {w:"NODULE", def:"A palpable lesion over 1 cm, deeper than a papule."},
+  {w:"PLAQUE", def:"A flat-topped, raised lesion over 1 cm."},
+  {w:"LESION", def:"Any area of abnormal tissue change."},
+  {w:"BIOPSY", def:"Tissue sampling used to confirm a diagnosis."},
+  {w:"KELOID", def:"A raised scar that overgrows the original wound."},
+  {w:"BULLAE", def:"Large fluid-filled blisters over 1 cm."},
+  {w:"MERKEL", def:"An aggressive neuroendocrine skin cancer bears this name."},
+  {w:"DARIER", def:"The sign for stroking a lesion and provoking a wheal, as in mastocytosis."},
+  {w:"LIVEDO", def:"A mottled, reticulated vascular pattern on the skin."},
+  {w:"SPIDER", def:"A vascular lesion with a central vessel and radiating branches."},
+  {w:"LIPOMA", def:"A benign tumor composed of fat tissue."},
+  {w:"ANAGEN", def:"The active growth phase of the hair cycle."},
+  {w:"ESCHAR", def:"Dark, necrotic tissue covering a wound."},
+  {w:"SLOUGH", def:"Yellow, fibrinous debris in a wound bed."},
+  {w:"VENOUS", def:"Relating to impaired venous return, as in stasis ulcers."},
+  {w:"IMMUNE", def:"Relating to the body's defense system, dysregulated in many dermatoses."},
+  {w:"FUNGAL", def:"Caused by a dermatophyte or yeast organism."},
+  {w:"ATOPIC", def:"Describes the genetically predisposed inflammatory dermatitis."},
+  {w:"LICHEN", def:"As in lichen planus, a papulosquamous eruption."},
+  {w:"TZANCK", def:"The smear used to detect multinucleated giant cells in herpesvirus infection."},
+  {w:"ZOSTER", def:"Reactivation of varicella-zoster virus in a dermatomal distribution."},
+  {w:"VERTEX", def:"The scalp crown, a site affected in pattern hair loss."},
+  {w:"RECEDE", def:"What a hairline does in androgenetic alopecia."},
+  {w:"REGROW", def:"Hair regrowth following effective alopecia treatment."},
+  {w:"LUNULA", def:"The pale, crescent-shaped area at the base of the nail plate."},
+  {w:"MATRIX", def:"The nail structure responsible for nail plate growth."},
+  {w:"PALLOR", def:"Unusual paleness of the skin."},
+  {w:"STASIS", def:"As in venous stasis dermatitis of the lower legs."},
+  {w:"VELLUS", def:"Fine, unpigmented hair covering most body surfaces."},
+  {w:"MORPHEA", def:"Localized scleroderma limited to the skin and underlying tissue."},
+  {w:"SARCOID", def:"A granulomatous disease that can present with cutaneous plaques or nodules."},
+  {w:"LENTIGO", def:"A benign, flat pigmented macule from sun exposure or aging."},
+  {w:"KOEBNER", def:"The phenomenon of new lesions arising at sites of skin trauma."},
+  {w:"AUSPITZ", def:"The sign of pinpoint bleeding when psoriatic scale is removed."},
+  {w:"WICKHAM", def:"The fine white striae seen on lichen planus papules."},
+  {w:"GOTTRON", def:"The papules over the knuckles characteristic of dermatomyositis."},
+  {w:"BRESLOW", def:"The depth measurement used to stage melanoma."},
+  {w:"PURPURA", def:"Non-blanching discoloration from blood outside the vessels."},
+  {w:"ANGIOMA", def:"A benign tumor made up of blood vessels."},
+  {w:"FIBROMA", def:"A benign tumor of fibrous connective tissue."},
+  {w:"TELOGEN", def:"The resting phase of the hair cycle, preceding shedding."},
+  {w:"CATAGEN", def:"The brief transitional phase of the hair cycle between growth and rest."},
+  {w:"ACTINIC", def:"Related to chronic sun damage, as in actinic keratosis."},
+  {w:"MELASMA", def:"Symmetric facial hyperpigmentation linked to hormones and sun exposure."},
+  {w:"GUTTATE", def:"A psoriasis subtype with small, drop-like lesions, often post-strep."},
+  {w:"PATCHES", def:"Flat lesions over 1 cm in diameter."},
+  {w:"ABSCESS", def:"A localized collection of pus requiring drainage."},
+  {w:"CURETTE", def:"The instrument used to scrape off superficial lesions."},
+  {w:"DEMODEX", def:"A skin mite implicated in some cases of rosacea."},
+  {w:"SCABIES", def:"An intensely pruritic infestation caused by a burrowing mite."},
+  {w:"VERRUCA", def:"The medical term for a wart caused by HPV."},
+  {w:"VESICLE", def:"A small, fluid-filled lesion under 1 cm."},
+  {w:"PUSTULE", def:"A small lesion filled with purulent fluid."},
+  {w:"DISCOID", def:"A lupus subtype presenting with coin-shaped, scarring plaques."},
+  {w:"RAYNAUD", def:"The phenomenon of episodic digital pallor and cyanosis from vasospasm."},
+  {w:"STAGING", def:"Classifying a cancer's extent, as with melanoma."},
+  {w:"CONTACT", def:"A dermatitis triggered by direct exposure to an irritant or allergen."},
+  {w:"ALLERGY", def:"An immune hypersensitivity reaction to an otherwise harmless substance."},
+  {w:"TOPICAL", def:"Applied directly to the skin rather than taken systemically."},
+  {w:"STEROID", def:"A common anti-inflammatory topical or systemic medication class."},
+  {w:"XEROSIS", def:"Abnormally dry skin."},
+  {w:"PITTING", def:"Small nail plate depressions, classically seen in psoriasis."},
+  {w:"CUTICLE", def:"The tissue that seals the nail plate to the surrounding skin."},
+  {w:"KERATIN", def:"The structural protein that makes up the outer skin and nails."},
+  {w:"ELASTIN", def:"A dermal protein responsible for skin's elastic recoil."},
+  {w:"MELANIN", def:"The pigment produced by melanocytes."},
+  {w:"ALOPECIA", def:"Hair loss, whether patterned, patchy, or diffuse."},
+  {w:"VITILIGO", def:"An autoimmune condition causing depigmented patches of skin."},
+  {w:"MELANOMA", def:"The most dangerous form of skin cancer, arising from melanocytes."},
+  {w:"NIKOLSKY", def:"The sign of epidermal sliding with lateral pressure, seen in pemphigus."},
+  {w:"BOWENOID", def:"Describes a subtype of in-situ squamous lesion, sometimes HPV-related."},
+  {w:"IMPETIGO", def:"A superficial bacterial infection with honey-colored crusting."},
+  {w:"PRURITUS", def:"The medical term for itch."},
+  {w:"PERIORAL", def:"Around the mouth, the site of a common facial dermatitis."},
+  {w:"CHLOASMA", def:"An older term for melasma occurring in pregnancy."},
+  {w:"ALBINISM", def:"A genetic condition resulting in little or no melanin production."},
+  {w:"XANTHOMA", def:"A lipid-filled deposit in the skin, often linked to dyslipidemia."},
+  {w:"PUSTULAR", def:"Describes a psoriasis subtype presenting with sterile pustules."},
+  {w:"FLEXURAL", def:"Relating to skin folds, a classic distribution for eczema and psoriasis."},
+  {w:"ATYPICAL", def:"Describes a nevus with irregular but not clearly malignant features."},
+  {w:"PYOGENIC", def:"As in pyogenic granuloma, a friable vascular lesion prone to bleeding."},
+  {w:"COMEDONE", def:"A follicle plugged with keratin and sebum, the primary acne lesion."},
+  {w:"FLUSHING", def:"Transient facial redness characteristic of rosacea."},
+  {w:"ANDROGEN", def:"A hormone implicated in pattern hair loss and acne."},
+  {w:"RETINOID", def:"A vitamin A derivative used to treat acne and photoaging."},
+  {w:"SYSTEMIC", def:"Affecting the whole body rather than a localized area."},
+  {w:"BIOLOGIC", def:"A targeted injectable therapy used for conditions like psoriasis."},
+  {w:"CLUBBING", def:"Bulbous enlargement of the digit tips, a sign of systemic disease."},
+  {w:"FOLLICLE", def:"The structure from which a hair grows."},
+  {w:"COLLAGEN", def:"The main structural protein of the dermis."},
+  {w:"ERYTHEMA", def:"Redness of the skin from vascular dilation."},
+  {w:"CYANOSIS", def:"A bluish skin discoloration from poor oxygenation."},
+  {w:"JAUNDICE", def:"Yellowing of the skin from elevated bilirubin."},
+  {w:"ARTERIAL", def:"Describes ulcers caused by poor arterial blood supply."},
+  {w:"ISCHEMIC", def:"Relating to reduced blood flow, a cause of tissue necrosis."},
+  {w:"DIABETIC", def:"Describes ulcers and skin changes related to diabetes mellitus."},
+  {w:"NECROSIS", def:"Death of tissue."},
+  {w:"GANGRENE", def:"Tissue death from severely compromised blood supply."},
+  {w:"INCISION", def:"A surgical cut made to access or remove tissue."},
+  {w:"DRAINAGE", def:"The evacuation of pus or fluid from a collection."},
+  {w:"FURUNCLE", def:"A deep bacterial infection of a hair follicle, or boil."},
+  {w:"IRRITANT", def:"A substance causing dermatitis through direct chemical injury."},
+  {w:"ALLERGEN", def:"A substance capable of triggering an allergic reaction."},
+  {w:"NUMMULAR", def:"An eczema subtype presenting with coin-shaped lesions."},
+  {w:"SENTINEL", def:"The first lymph node biopsied to check for melanoma spread."}
+];
+
+const VALID_WORDS = new Set(WORD_BANK.map(x=>x.w));
+const MAX_GUESSES = 6;
+
+// --- Deterministic daily schedule ---
+// Seeded shuffle so the order looks random but is identical for every player,
+// then indexed by the number of days since a fixed epoch.
+function mulberry32(seed){
+  return function(){
+    seed |= 0; seed = (seed + 0x6D2B79F5) | 0;
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+function seededShuffle(arr, seed){
+  const rng = mulberry32(seed);
+  const a = arr.slice();
+  for(let i=a.length-1; i>0; i--){
+    const j = Math.floor(rng()*(i+1));
+    [a[i],a[j]] = [a[j],a[i]];
+  }
+  return a;
+}
+const SCHEDULE = seededShuffle(WORD_BANK, 20250101);
+const EPOCH = new Date(2025,0,1); // Jan 1, 2025, local time
+function daysSinceEpoch(){
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  return Math.floor((today - EPOCH) / 86400000);
+}
+const DAY_INDEX = daysSinceEpoch();
+const DAILY_ANSWER = SCHEDULE[((DAY_INDEX % SCHEDULE.length) + SCHEDULE.length) % SCHEDULE.length];
+const CASE_NUMBER = DAY_INDEX + 1;
+
+let ANSWER = DAILY_ANSWER;
+let WORD_LEN = ANSWER.w.length;
+let mode = "daily"; // "daily" | "practice"
+let currentGuess = "";
+let guesses = [];
+let guessResults = [];
+let gameOver = false;
+let hintsUsed = 0;
+let hintedPositions = [];
+const MAX_HINTS = 3;
+
+const board = document.getElementById("board");
+const keyboardEl = document.getElementById("keyboard");
+const messageEl = document.getElementById("message");
+const chartNote = document.getElementById("chart-note");
+const newGameBtn = document.getElementById("newgame");
+const subtitleEl = document.getElementById("subtitle");
+const caseNumberEl = document.getElementById("case-number");
+const hintBtn = document.getElementById("hint-btn");
+const hintTextEl = document.getElementById("hint-text");
+const themeToggleBtn = document.getElementById("theme-toggle");
+
+let rows = [];
+function buildBoard(length){
+  board.innerHTML = "";
+  rows = [];
+  const gap = 7;
+  const available = Math.min(360, window.innerWidth - 48);
+  let tileSize = Math.floor((available - gap * (length - 1)) / length);
+  tileSize = Math.max(30, Math.min(54, tileSize));
+  const fontSize = Math.max(14, Math.floor(tileSize * 0.42));
+  for(let r=0; r<MAX_GUESSES; r++){
+    const rowEl = document.createElement("div");
+    rowEl.className = "row";
+    rowEl.style.gridTemplateColumns = `repeat(${length}, ${tileSize}px)`;
+    rowEl.style.gap = gap + "px";
+    const tiles = [];
+    for(let c=0; c<length; c++){
+      const tile = document.createElement("div");
+      tile.className = "tile";
+      tile.style.width = tileSize + "px";
+      tile.style.height = tileSize + "px";
+      tile.style.fontSize = fontSize + "px";
+      rowEl.appendChild(tile);
+      tiles.push(tile);
+    }
+    board.appendChild(rowEl);
+    rows.push({el:rowEl, tiles});
+  }
+}
+
+const KEY_ROWS = [
+  ["Q","W","E","R","T","Y","U","I","O","P"],
+  ["A","S","D","F","G","H","J","K","L"],
+  ["ENTER","Z","X","C","V","B","N","M","BACK"]
+];
+const keyEls = {};
+KEY_ROWS.forEach(rowKeys=>{
+  const krow = document.createElement("div");
+  krow.className = "krow";
+  rowKeys.forEach(k=>{
+    const key = document.createElement("div");
+    key.className = "key" + (k==="ENTER"||k==="BACK" ? " wide" : "");
+    key.textContent = k==="BACK" ? "DEL" : k;
+    key.addEventListener("click", ()=>handleKey(k));
+    krow.appendChild(key);
+    keyEls[k] = key;
+  });
+  keyboardEl.appendChild(krow);
+});
+
+function setMessage(text){
+  messageEl.textContent = text;
+  if(text){
+    setTimeout(()=>{ if(messageEl.textContent === text) messageEl.textContent = ""; }, 1800);
+  }
+}
+
+function updateAttemptsLeft(){
+  document.getElementById("attempts-left").textContent =
+    (MAX_GUESSES - guesses.length) + " attempts remaining";
+}
+
+function handleKey(k){
+  if(gameOver) return;
+  if(k === "ENTER"){
+    submitGuess();
+  } else if(k === "BACK"){
+    currentGuess = currentGuess.slice(0,-1);
+    renderCurrentRow();
+  } else if(/^[A-Z]$/.test(k) && currentGuess.length < WORD_LEN){
+    currentGuess += k;
+    renderCurrentRow();
+  }
+}
+
+function renderCurrentRow(){
+  const row = rows[guesses.length];
+  if(!row) return;
+  row.tiles.forEach((tile,i)=>{
+    tile.textContent = currentGuess[i] || "";
+    tile.classList.toggle("filled", !!currentGuess[i]);
+  });
+}
+
+function submitGuess(){
+  if(currentGuess.length !== WORD_LEN){
+    setMessage("Five letters needed");
+    shakeRow(guesses.length);
+    return;
+  }
+  if(!VALID_WORDS.has(currentGuess)){
+    setMessage("Not in the derm word bank");
+    shakeRow(guesses.length);
+    return;
+  }
+  const result = scoreGuess(currentGuess, ANSWER.w);
+  const row = rows[guesses.length];
+  animateReveal(row, currentGuess, result);
+  guesses.push(currentGuess);
+  guessResults.push(result);
+  if(mode === "daily") saveProgress();
+
+  const won = currentGuess === ANSWER.w;
+  const lost = !won && guesses.length === MAX_GUESSES;
+
+  setTimeout(()=>{
+    updateAttemptsLeft();
+    if(won){
+      setMessage("Correct");
+      endGame(true);
+    } else if(lost){
+      endGame(false);
+    }
+  }, WORD_LEN*300 + 200);
+
+  currentGuess = "";
+}
+
+function scoreGuess(guess, answer){
+  const len = answer.length;
+  const result = new Array(len).fill("absent");
+  const answerLetters = answer.split("");
+  const guessLetters = guess.split("");
+  const used = new Array(len).fill(false);
+
+  for(let i=0;i<len;i++){
+    if(guessLetters[i] === answerLetters[i]){
+      result[i] = "correct";
+      used[i] = true;
+    }
+  }
+  for(let i=0;i<len;i++){
+    if(result[i] === "correct") continue;
+    for(let j=0;j<len;j++){
+      if(!used[j] && guessLetters[i] === answerLetters[j]){
+        result[i] = "present";
+        used[j] = true;
+        break;
+      }
+    }
+  }
+  return result;
+}
+
+function animateReveal(row, guess, result){
+  row.tiles.forEach((tile,i)=>{
+    setTimeout(()=>{
+      tile.classList.add("flip");
+      setTimeout(()=>{
+        tile.classList.add(result[i]);
+        tile.textContent = guess[i];
+        updateKeyState(guess[i], result[i]);
+      }, 250);
+    }, i*300);
+  });
+}
+
+function updateKeyState(letter, state){
+  const key = keyEls[letter];
+  if(!key) return;
+  const rank = {absent:0, present:1, correct:2};
+  const currentRank = key.classList.contains("correct") ? 2
+    : key.classList.contains("present") ? 1
+    : key.classList.contains("absent") ? 0 : -1;
+  if(rank[state] > currentRank){
+    key.classList.remove("absent","present","correct");
+    key.classList.add(state);
+  }
+}
+
+function shakeRow(index){
+  const row = rows[index];
+  if(!row) return;
+  row.el.classList.add("shake");
+  setTimeout(()=>row.el.classList.remove("shake"), 400);
+}
+
+function endGame(won){
+  gameOver = true;
+  hintBtn.disabled = true;
+  chartNote.style.display = "block";
+  chartNote.innerHTML = `
+    <div class="stamp">${won ? "Diagnosis confirmed" : "Case closed, unsolved"}</div>
+    <div class="word">${ANSWER.w.toLowerCase()}</div>
+    <div class="def">${ANSWER.def}</div>
+    ${mode === "daily" ? '<div style="margin-top:8px;font-size:10px;letter-spacing:0.06em;color:#7A8B84;">Next case unlocks at midnight</div>' : ''}
+  `;
+  newGameBtn.textContent = "Practice round";
+  newGameBtn.style.display = "inline-block";
+  if(mode === "daily") saveProgress();
+}
+
+// --- Persistence for the daily puzzle only ---
+function progressKey(){
+  return "dw_progress_" + DAY_INDEX;
+}
+function saveProgress(){
+  localStorage.setItem(progressKey(), JSON.stringify({
+    guesses, gameOver, hintsUsed, hintedPositions,
+    won: guesses[guesses.length-1] === ANSWER.w && gameOver
+  }));
+}
+function loadProgress(){
+  const raw = localStorage.getItem(progressKey());
+  if(!raw) return null;
+  try { return JSON.parse(raw); } catch(e){ return null; }
+}
+
+function resetBoardUI(){
+  buildBoard(WORD_LEN);
+  Object.values(keyEls).forEach(key=>{
+    key.classList.remove("absent","present","correct");
+  });
+  chartNote.style.display = "none";
+  chartNote.innerHTML = "";
+  newGameBtn.style.display = "none";
+  currentGuess = "";
+  guesses = [];
+  guessResults = [];
+  gameOver = false;
+  hintsUsed = 0;
+  hintedPositions = [];
+  hintTextEl.innerHTML = "";
+  hintBtn.disabled = false;
+  hintBtn.textContent = "Hint";
+  updateAttemptsLeft();
+}
+
+function revealHint(forcedPosition){
+  if(gameOver || hintsUsed >= MAX_HINTS) return;
+  hintsUsed++;
+  if(hintsUsed === 1){
+    hintTextEl.innerHTML = "Clue: " + ANSWER.def;
+  } else {
+    const solved = new Set(hintedPositions);
+    guessResults.forEach((res)=>{
+      res.forEach((state,i)=>{ if(state === "correct") solved.add(i); });
+    });
+    let pos;
+    if(typeof forcedPosition === "number"){
+      pos = forcedPosition;
+    } else {
+      const open = [];
+      for(let i=0;i<WORD_LEN;i++) if(!solved.has(i)) open.push(i);
+      pos = open.length ? open[Math.floor(Math.random()*open.length)] : 0;
+    }
+    hintedPositions.push(pos);
+    hintTextEl.innerHTML = hintTextEl.innerHTML + `<br>Letter ${pos+1} is "${ANSWER.w[pos]}"`;
+  }
+  if(hintsUsed >= MAX_HINTS){
+    hintBtn.disabled = true;
+    hintBtn.textContent = "No more hints";
+  }
+  if(mode === "daily") saveProgress();
+}
+
+hintBtn.addEventListener("click", ()=> revealHint());
+
+function replayGuesses(savedGuesses){
+  savedGuesses.forEach((g, gi)=>{
+    const result = scoreGuess(g, ANSWER.w);
+    const row = rows[gi];
+    row.tiles.forEach((tile,i)=>{
+      tile.textContent = g[i];
+      tile.classList.add("filled", result[i]);
+      updateKeyState(g[i], result[i]);
+    });
+    guesses.push(g);
+    guessResults.push(result);
+  });
+}
+
+function startDaily(){
+  mode = "daily";
+  ANSWER = DAILY_ANSWER;
+  WORD_LEN = ANSWER.w.length;
+  subtitleEl.textContent = WORD_LEN + " letters, one diagnosis per day";
+  caseNumberEl.textContent = "Case No. " + String(CASE_NUMBER).padStart(3,"0");
+  resetBoardUI();
+
+  const saved = loadProgress();
+  if(saved && saved.guesses && saved.guesses.length){
+    replayGuesses(saved.guesses);
+    updateAttemptsLeft();
+    if(typeof saved.hintsUsed === "number" && saved.hintsUsed > 0){
+      hintsUsed = 0;
+      hintedPositions = [];
+      const savedPositions = Array.isArray(saved.hintedPositions) ? saved.hintedPositions : [];
+      for(let i=0; i<saved.hintsUsed; i++){
+        revealHint(i === 0 ? undefined : savedPositions[i-1]);
+      }
+    }
+    if(saved.gameOver){
+      endGame(saved.won);
+    }
+  }
+}
+
+function startPractice(){
+  mode = "practice";
+  let candidate;
+  do {
+    candidate = WORD_BANK[Math.floor(Math.random()*WORD_BANK.length)];
+  } while (candidate.w === ANSWER.w && WORD_BANK.length > 1);
+  ANSWER = candidate;
+  WORD_LEN = ANSWER.w.length;
+  subtitleEl.textContent = "practice round (" + WORD_LEN + " letters), not the daily case";
+  caseNumberEl.textContent = "Practice";
+  resetBoardUI();
+}
+
+newGameBtn.addEventListener("click", ()=>{
+  startPractice();
+});
+
+document.addEventListener("keydown", (e)=>{
+  const key = e.key.toUpperCase();
+  if(key === "ENTER") handleKey("ENTER");
+  else if(key === "BACKSPACE") handleKey("BACK");
+  else if(/^[A-Z]$/.test(key)) handleKey(key);
+});
+
+function currentTheme(){
+  return document.documentElement.getAttribute("data-theme") === "light" ? "light" : "dark";
+}
+function setThemeButtonIcon(){
+  themeToggleBtn.innerHTML = currentTheme() === "light" ? "&#9728;" : "&#9790;";
+}
+themeToggleBtn.addEventListener("click", ()=>{
+  const next = currentTheme() === "light" ? "dark" : "light";
+  document.documentElement.setAttribute("data-theme", next);
+  try{ localStorage.setItem("dw_theme", next); }catch(e){}
+  setThemeButtonIcon();
+});
+setThemeButtonIcon();
+
+startDaily();
+</script>
+
+</body>
+</html>
